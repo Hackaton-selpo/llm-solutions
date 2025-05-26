@@ -1,16 +1,27 @@
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate
+import logging
 import re
 
+from langchain_core.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
 
-class Agent_system:
-    def __init__(self, model: str, base_url: str, api_key: str, temperature: float = 0.7, top_p: float = 0.9):
+logger = logging.getLogger(__name__)
+
+
+class AgentSystem:
+    def __init__(
+        self,
+        model: str,
+        base_url: str,
+        api_key: str,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+    ):
         self.model = ChatOpenAI(
             model=model,
             base_url=base_url,
             api_key=api_key,
             temperature=temperature,
-            top_p=top_p
+            top_p=top_p,
         )
 
     def _contains_yes(self, text: str) -> bool:
@@ -18,11 +29,11 @@ class Agent_system:
         True если в первом предложении текста есть слово "да" (в любом регистре),
         False в противном случае.
         """
-        sentences = re.split(r'[.!?]', text)
+        sentences = re.split(r"[.!?]", text)
         if sentences:
             first_sentence = sentences[0]
             # Ищем слово "да" в любом регистре, как отдельное слово
-            return bool(re.search(r'\bда\b', first_sentence, re.IGNORECASE))
+            return bool(re.search(r"\bда\b", first_sentence, re.IGNORECASE))
         return False
 
     def _decision_of_emotions(self, query: str, model: ChatOpenAI) -> bool:
@@ -51,7 +62,7 @@ class Agent_system:
         prompt = PromptTemplate.from_template(template)
         chat = prompt | model
         response = chat.invoke({"query": query})
-        print("Ответ анализа на эмоции", response.content)
+        logger.info(f"Ответ анализа на эмоции: {response.content}")
         return self._contains_yes(response.content)
 
     def _extract_emotions_from_llm_response(self, llm_response: str) -> list[str]:
@@ -63,17 +74,20 @@ class Agent_system:
         if match:
             emotions_string = match.group(1).strip()
 
-            if emotions_string.startswith('(') and emotions_string.endswith(')'):
+            if emotions_string.startswith("(") and emotions_string.endswith(")"):
                 emotions_string = emotions_string[1:-1]
 
-            emotions_list = [emotion.strip() for emotion in emotions_string.split(',') if emotion.strip()]
-            return ', '.join(emotions_list)
+            emotions_list = [
+                emotion.strip()
+                for emotion in emotions_string.split(",")
+                if emotion.strip()
+            ]
+            return ", ".join(emotions_list)
         else:
             return "модель не ответила"
 
     def _analyze_emotions(self, model: ChatOpenAI, letter: str) -> str:
-        """Анализ письма на эмоции и чувства автора.
-        """
+        """Анализ письма на эмоции и чувства автора."""
 
         template = """ 
         Ты - профессиональный психолог, специализирующийся на анализе писем. Тебе нужно проанализировать письмо и выделить в нем только ключевые эмоции и чувства, которые испытывает автор.
@@ -136,15 +150,21 @@ class Agent_system:
         main_template = PromptTemplate.from_template(main_template)
         chat = main_template | self.model
         if not (is_contain_emotional):
-            print("Запрос не содержит требований к эмоциям")
+            logger.info("Запрос не содержит требований к эмоциям")
             if letter is None:
                 emotions = ""
             else:
                 emotions = self._analyze_emotions(self.model, letter)
-        print("Эмоции, которые мы получили:", emotions)
-        content = chat.invoke({
-            "emotional": emotions,
-            "query": query if query else "",
-            "letter": letter if letter else ""
-        })
-        return content.content if content else "Сервис временно недоступен, попробуйте позже."
+        logger.info("Эмоции, которые мы получили: {emotions}")
+        content = chat.invoke(
+            {
+                "emotional": emotions,
+                "query": query if query else "",
+                "letter": letter if letter else "",
+            }
+        )
+        return (
+            content.content
+            if content
+            else "Сервис временно недоступен, попробуйте позже."
+        )
