@@ -1,11 +1,7 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 import re
-import os
 
-from dotenv import load_dotenv
-
-load_dotenv('../.env')
 
 class Agent_system:
     def __init__(self, model: str, base_url: str, api_key: str, temperature: float = 0.7, top_p: float = 0.9):
@@ -95,10 +91,10 @@ class Agent_system:
         prompt = PromptTemplate.from_template(template)
         chat = prompt | model
         response = chat.invoke({"text": letter})
-        extracted_emotions =  self.extract_emotions_from_llm_response(response.content)
+        extracted_emotions = self.extract_emotions_from_llm_response(response.content)
         return extracted_emotions if extracted_emotions != "модель не ответила" else " "
-    
-    def process_agent_system(self, query: str = None, letter: str=None) -> str:
+
+    def process_agent_system(self, query: str = None, letter: str = None) -> str:
         """
         Обрабатывает запрос пользователя и генерирует историю
         """
@@ -139,7 +135,7 @@ class Agent_system:
             is_contain_emotional = self._decision_of_emotions(query, self.model)
         main_template = PromptTemplate.from_template(main_template)
         chat = main_template | self.model
-        if not(is_contain_emotional):
+        if not (is_contain_emotional):
             print("Запрос не содержит требований к эмоциям")
             if letter is None:
                 emotions = ""
@@ -152,4 +148,3 @@ class Agent_system:
             "letter": letter if letter else ""
         })
         return content.content if content else "Сервис временно недоступен, попробуйте позже."
-    
