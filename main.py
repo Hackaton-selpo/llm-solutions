@@ -3,6 +3,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
+import httpx
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -37,12 +38,16 @@ app.add_middleware(
 
 
 @app.get("/get_llm_answer")
-async def generate_llm_answer(prompt: str, letter_id: Optional[int] = None):
+async def generate_llm_answer(prompt: str, letter_id: Optional[str] = None):
     if letter_id:
         """
         get letter from db and add to prompt
         """
-        pass
+        async with httpx.AsyncClient() as client:
+            letters_list = await client.get(
+                f"https://yamata-no-orochi.nktkln.com/letters/letters/?letter_id={letter_id}"
+            )
+            letter_text = letters_list.json()[0]["text"]
 
     agent = AgentSystem(
         model="qwen/qwen3-235b-a22b:free",
@@ -51,8 +56,10 @@ async def generate_llm_answer(prompt: str, letter_id: Optional[int] = None):
         temperature=0.7,
         top_p=0.8,
     )
-
-    story = agent.process_agent_system(query=prompt)
+    if letter_text:
+        story = agent.process_agent_system(query=prompt, letter=letter_text)
+    else:
+        story = agent.process_agent_system(query=prompt)
     return {"ai_answer": story}
 
 
