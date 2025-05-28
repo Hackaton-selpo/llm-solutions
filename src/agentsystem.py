@@ -17,8 +17,10 @@ class AgentSystem:
         base_url: str,
         api_key: str,
         api_key_image: str,
+        api_key_song: str,
         temperature: float = 0.7,
         top_p: float = 0.9,
+        music: bool = False,
     ):
         self.model = ChatOpenAI(
             model=model,
@@ -27,7 +29,53 @@ class AgentSystem:
             temperature=temperature,
             top_p=top_p,
         )
+        self._music = music
         self._api_key_image = api_key_image
+        self._api_key_song = api_key_song
+    
+    def make_song(self, history: str) -> str:
+        """Создает текст для песни + саму песню"""
+        template = """Ты - профессиональный композитор. Тебе нужно писать куплеты для песен на военную тематику под гитару.
+
+        Всего тебе нужно сделать 2 куплета. Учти, все главные аспекты истории, выделив их в песне
+
+        История: {history}
+
+        Пожалуйста, предоставь ответ в следующем формате:
+
+        Куплет 1
+        текст куплета построчно
+
+        Куплет 2
+        текст куплета построчно
+        """
+        prompt = PromptTemplate.from_template(template)
+        chat = prompt | self.model
+        song_text = chat.invoke({"history": history}).content
+        print(song_text) # потом убрать
+        input = {
+        #  "callback_url": None,
+        "title": "Военная песня 1",
+        "tags": "Гитара, военное настроение", # посмотреть может нужно эмоционал как-то обработать
+        "prompt": song_text
+        }
+        headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': f'Bearer {self._api_key_song}'
+        }
+        url_endpoint = "https://api.gen-api.ru/api/v1/networks/suno"
+        response_music = requests.post(url_endpoint, json=input, headers=headers) # обработать пришёл ли нам ответ вообще TODO
+        print(response_music.json()) # потом убрать
+        url_endpoint_answer = f"https://api.gen-api.ru/api/v1/request/get/{response_music.json()['request_id']}"
+        while True:
+            print("Пока что в работе")
+            time.sleep(60)
+            response_2 = requests.get(url_endpoint_answer, headers=headers)
+            if response_2.json()['status'] == 'failed':
+                raise "Сервис музыки не работает"
+            elif response_2.json()['status'] == 'success':
+                return response_2.json()['result'][0]
 
     def create_image(self, prompt: str) -> str:
         """Получает промт, а возвращает ссылку на картинку"""
@@ -246,11 +294,13 @@ class AgentSystem:
         main_template = PromptTemplate.from_template(main_template)
         chat = main_template | self.model
         if not (is_contain_emotional):
+            print("нет эмоций")
             logger.info("Запрос не содержит требований к эмоциям")
             if letter is None:
                 emotions = ""
             else:
                 emotions = self._analyze_emotions(self.model, letter)
+        print("Эмоции: ", emotions) # убрать потом
         logger.info("Эмоции, которые мы получили: {emotions}")
         try:
             history = chat.invoke(
@@ -273,5 +323,13 @@ class AgentSystem:
         except Exception as e:
             logger.error(e)
             raise "Сервис генерации изображений временно недоступен, попробуйте позже"
+        
+        if self._music:
+            try:
+                url_music = self.make_song(history.content)
+                return {"history": history.content, "url_pic": url, "url_music": url_music}
+            except Exception as e:
+                logger.error(e)
+                raise "Сервис генерации музыки временно недоступен, попробуйте позже"
 
         return {"history": history.content, "url_pic": url}
