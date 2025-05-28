@@ -28,40 +28,40 @@ class AgentSystem:
             top_p=top_p,
         )
         self._api_key_image = api_key_image
-    
+
     def create_image(self, prompt: str) -> str:
         """Получает промт, а возвращает ссылку на картинку"""
         url = "https://api.freepik.com/v1/ai/mystic"
         payload = {
-        "prompt": prompt,
-        "structure_strength": 50,
-        "adherence": 50,
-        "hdr": 50,
-        "resolution": "1k",
-        "aspect_ratio": "social_story_9_16",
-        "model": "realism",
-        "creative_detailing": 33,
-        "engine": "automatic",
-        "fixed_generation": False,
-        "filter_nsfw": True,
+            "prompt": prompt,
+            "structure_strength": 50,
+            "adherence": 50,
+            "hdr": 50,
+            "resolution": "1k",
+            "aspect_ratio": "social_story_9_16",
+            "model": "realism",
+            "creative_detailing": 33,
+            "engine": "automatic",
+            "fixed_generation": False,
+            "filter_nsfw": True,
         }
         headers = {
             "x-freepik-api-key": self._api_key_image,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         response = requests.request("POST", url, json=payload, headers=headers)
         if response.status_code == 200:
-            id = response.json()['data']['task_id']
+            id = response.json()["data"]["task_id"]
         else:
             raise "Картинка не создалась"
         for _ in range(3):
             time.sleep(5)
             url = f"https://api.freepik.com/v1/ai/mystic/{id}"
             response = requests.request("GET", url, headers=headers)
-            if response.json()['data']['status'] == 'COMPLETED':
-                return (response.json()['data']['generated'])
+            if response.json()["data"]["status"] == "COMPLETED":
+                return response.json()["data"]["generated"]
         raise "Не вышло найти картинку"
-    
+
     def get_summary_history(self, history: str) -> str:
         template = """Ты - профессиональный литератор
         Тебе нужно из следующего текста выделить какой-то момент, чтобы потом на основании этого момента можно было сделать картину. Так что сделай акцент на том, что на картине должен быть отображен человек либо люди, которые участвуют в выбранном моменте. 
@@ -108,7 +108,7 @@ class AgentSystem:
         response = chat.invoke({"query": query})
         logger.info(f"Ответ анализа на корректность query: {response.content}")
         return self._contains_yes(response.content)
-        
+
     def _contains_yes(self, text: str) -> bool:
         """
         True если в первом предложении текста есть слово "да" (в любом регистре),
@@ -193,7 +193,7 @@ class AgentSystem:
         extracted_emotions = self._extract_emotions_from_llm_response(response.content)
         return extracted_emotions if extracted_emotions != "модель не ответила" else " "
 
-    def process_agent_system(self, query: str = None, letter: str = None) -> str:
+    def process_agent_system(self, query: str = None, letter: str = None) -> dict:
         """
         Обрабатывает запрос пользователя и генерирует историю
         """
@@ -230,13 +230,18 @@ class AgentSystem:
         
         В качестве ответа ты должен только написать историю, которую ты сочинил. История должна быть до 500 слов, но не менее 300.
         """
-        if query is None and letter is None:
-            return "Ваш запрос не содержит ни запроса, ни письма. Введите что-нибудь"
-        if query is not None:
+        is_contain_emotional = False  # изначально запрос не содержит эмоций
+        if (
+            query is None and letter is None
+        ):  # если у нас нет письма и запроса - отправляем строку с ошибкой
+            raise "Ваш запрос не содержит ни запроса, ни письма. Введите что-нибудь"
+        if query is not None:  # проверяем на нормальность запрос + содержание эмоций
             is_normal_query = self._check_user_query(query)
-            if not is_normal_query:
-                logger.error("Запрос пользователя не соответствует требованиям военной тематики.")
-                return "Ваш запрос не соответствует требованиям военной тематики. Пожалуйста, переформулируйте его."
+            if not is_normal_query:  # если запрос не про военку
+                logger.error(
+                    "Запрос пользователя не соответствует требованиям военной тематики."
+                )
+                raise "Ваш запрос не соответствует требованиям военной тематики. Пожалуйста, переформулируйте его."
             is_contain_emotional = self._decision_of_emotions(query, self.model)
         main_template = PromptTemplate.from_template(main_template)
         chat = main_template | self.model
@@ -255,15 +260,18 @@ class AgentSystem:
                     "letter": letter if letter else "",
                 }
             )
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # на случай, если история не загенилась по каким-то причинам
             logger.error(e)
-            return "Сервис временно недоступен, попробуйте позже."
-        
-        if history is None:
-            return "Сервис временно недоступен, попробуйте позже."
-        
-        # TODO обработать ошибки
+            raise "Сервис временно недоступен, попробуйте позже."
+
         history_summary = self.get_summary_history(history.content)
         history_summary += "It all happened during WWII"
-        url = self.create_image(history_summary)
+        try:  # подумать вообще над этим блоком. Надо как-то сделать так, чтобы хоть что-то вернулось
+            url = self.create_image(history_summary)
+        except Exception as e:
+            logger.error(e)
+            raise "Сервис генерации изображений временно недоступен, попробуйте позже"
+
         return {"history": history.content, "url_pic": url}
