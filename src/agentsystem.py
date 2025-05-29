@@ -104,10 +104,6 @@ class AgentSystem:
         Куплет 2
         текст куплета построчно
         """
-        prompt = PromptTemplate.from_template(template)
-        chat = prompt | self.model
-        song_text = chat.invoke({"history": history}).content
-        print(song_text) # потом убрать
         if self._without_words:
             input = {
             #  "callback_url": None,
@@ -116,6 +112,11 @@ class AgentSystem:
             }
             print("Мы тут!")
         else:  
+            prompt = PromptTemplate.from_template(template)
+            chat = prompt | self.model
+            song_text = chat.invoke({"history": history}).content
+            print(song_text) # потом убрать
+            
             input = {
             #  "callback_url": None,
             "title": "Военная песня 1",
