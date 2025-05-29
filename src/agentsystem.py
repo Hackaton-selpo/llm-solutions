@@ -9,6 +9,12 @@ from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
+class ServiceUnavailableError(Exception):
+    """Исключение для недоступных сервисов"""
+
+class UserMisstake(Exception):
+    """Ошибка ввода от пользователя"""
+
 
 class AgentSystem:
     def __init__(
@@ -21,6 +27,7 @@ class AgentSystem:
         temperature: float = 0.7,
         top_p: float = 0.9,
         music: bool = False,
+        without_words: bool=False
     ):
         self.model = ChatOpenAI(
             model=model,
@@ -29,11 +36,42 @@ class AgentSystem:
             temperature=temperature,
             top_p=top_p,
         )
+        self._without_words = without_words
         self._music = music
         self._api_key_image = api_key_image
         self._api_key_song = api_key_song
     
-    def make_song(self, history: str) -> str:
+    def _take_emotions_from_query(self, query: str) -> str:
+        """Выделяет эмоции из письма пользователя"""
+        template = """Пользователь пишет запрос, в котором он просит рассказать историю.
+        Твоя задача определить, какие у пользователя требования к эмоциональной составляющей истории.
+
+        Пример таких запросов:
+        - "История должна быть грустной", тут ты выделяешь эмоцию грусть
+        - "Сделай историю, которая вызывает ностальгию", тут ты должен взять ностальгию
+        - "Напиши историю о надежде и любви", тут любовь и надежда
+        - "Сделай историю более драматичной, более грустной, более веселой", тут выделяешь драматичная, грустная, веселая
+        - "Романтичная история", тут романитичность
+
+        Однако это лишь примеры, поэтому тебе следует быть внимательным и не ограничиваться только ними.
+
+        Запрос от пользователя:
+        {query}
+
+        ================================
+        Формат ответа, который ты должен использовать. Также тебе нельзя использовать .md разметку, только обычный текст:
+        Эмоции и чувства: (список из эмоций и чувств в строчку через запятую без дополнительной информации)
+        ===============================
+
+        Если ты верно выполнишь задание и выделишь верные эмоции и чувства, то я выделю тебе дополнительные мощности для работы с другими задачами.
+        """
+        prompt = PromptTemplate.from_template(template)
+        chat = prompt | self.model
+        response = chat.invoke({"query": query})
+        extracted_emotions = self._extract_emotions_from_llm_response(response.content)
+        return extracted_emotions if extracted_emotions != "модель не ответила" else " "
+    
+    def make_song(self, history: str, emotions: str) -> str:
         """Создает текст для песни + саму песню"""
         template = """Ты - профессиональный композитор. Тебе нужно писать куплеты для песен на военную тематику под гитару.
 
@@ -53,12 +91,20 @@ class AgentSystem:
         chat = prompt | self.model
         song_text = chat.invoke({"history": history}).content
         print(song_text) # потом убрать
-        input = {
-        #  "callback_url": None,
-        "title": "Военная песня 1",
-        "tags": "Гитара, военное настроение", # посмотреть может нужно эмоционал как-то обработать
-        "prompt": song_text
-        }
+        if self._without_words:
+            input = {
+            #  "callback_url": None,
+            "title": "Военная песня 1",
+            "tags": f"Гитара, военное настроение, {emotions}",
+            }
+            print("Мы тут!")
+        else:  
+            input = {
+            #  "callback_url": None,
+            "title": "Военная песня 1",
+            "tags": f"Гитара, военное настроение, {emotions}",
+            "prompt": song_text
+            }
         headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -73,7 +119,7 @@ class AgentSystem:
             time.sleep(60)
             response_2 = requests.get(url_endpoint_answer, headers=headers)
             if response_2.json()['status'] == 'failed':
-                raise "Сервис музыки не работает"
+                raise ServiceUnavailableError("Сервис музыки не работает")
             elif response_2.json()['status'] == 'success':
                 return response_2.json()['result'][0]
 
@@ -108,7 +154,7 @@ class AgentSystem:
             response = requests.request("GET", url, headers=headers)
             if response.json()["data"]["status"] == "COMPLETED":
                 return response.json()["data"]["generated"]
-        raise "Не вышло найти картинку"
+        raise ServiceUnavailableError("Не вышло найти картинку")
 
     def get_summary_history(self, history: str) -> str:
         template = """Ты - профессиональный литератор
@@ -198,7 +244,7 @@ class AgentSystem:
         logger.info(f"Ответ анализа на эмоции: {response.content}")
         return self._contains_yes(response.content)
 
-    def _extract_emotions_from_llm_response(self, llm_response: str) -> list[str]:
+    def _extract_emotions_from_llm_response(self, llm_response: str) -> str:
         if not llm_response:
             return "модель не ответила"
 
@@ -261,16 +307,14 @@ class AgentSystem:
         Эмоциональная составляющая будет тебе передаваться в следующей строке:
         
         Эмоциональная составляющая: {emotional}
-        
-        Если поле пустое, значит тебе нужно взять эмоциональную составляющую из запроса пользователя.
-        
+
         Запрос пользователя: {query}
-        
-        Если передано и то и другое, то ты должен использовать эмоциональную составляющую из запроса пользователя, а не из этого поля. Если ничего не передано, то ты должен использовать эмоционал письма.
+
+        Само письмо, к которому ты должен написать историю: {letter}
+
+        Если эмоциональная составляющая не передана, то проанализируй письмо и выдели из него эмоции
         
         Будь пожалуйста внимателен и используй все пожелания пользователя, которые он указал в запросе.
-        
-        Само письмо, к которому ты должен написать историю: {letter}
         
         Если письмо отсутствует, то ты должен написать историю на основе запроса пользователя.
 
@@ -282,14 +326,14 @@ class AgentSystem:
         if (
             query is None and letter is None
         ):  # если у нас нет письма и запроса - отправляем строку с ошибкой
-            raise "Ваш запрос не содержит ни запроса, ни письма. Введите что-нибудь"
+            raise UserMisstake("Ваш запрос не содержит ни запроса, ни письма. Введите что-нибудь")
         if query is not None:  # проверяем на нормальность запрос + содержание эмоций
             is_normal_query = self._check_user_query(query)
             if not is_normal_query:  # если запрос не про военку
                 logger.error(
                     "Запрос пользователя не соответствует требованиям военной тематики."
                 )
-                raise "Ваш запрос не соответствует требованиям военной тематики. Пожалуйста, переформулируйте его."
+                raise UserMisstake("Ваш запрос не соответствует требованиям военной тематики. Пожалуйста, переформулируйте его.")
             is_contain_emotional = self._decision_of_emotions(query, self.model)
         main_template = PromptTemplate.from_template(main_template)
         chat = main_template | self.model
@@ -300,6 +344,8 @@ class AgentSystem:
                 emotions = ""
             else:
                 emotions = self._analyze_emotions(self.model, letter)
+        else:
+            emotions = self._take_emotions_from_query(query)
         print("Эмоции: ", emotions) # убрать потом
         logger.info("Эмоции, которые мы получили: {emotions}")
         try:
@@ -314,7 +360,7 @@ class AgentSystem:
             Exception
         ) as e:  # на случай, если история не загенилась по каким-то причинам
             logger.error(e)
-            raise "Сервис временно недоступен, попробуйте позже."
+            raise ServiceUnavailableError("Сервис временно недоступен, попробуйте позже.")
 
         history_summary = self.get_summary_history(history.content)
         history_summary += "It all happened during WWII"
@@ -322,14 +368,14 @@ class AgentSystem:
             url = self.create_image(history_summary)
         except Exception as e:
             logger.error(e)
-            raise "Сервис генерации изображений временно недоступен, попробуйте позже"
+            raise ServiceUnavailableError("Сервис генерации изображений временно недоступен, попробуйте позже")
         
         if self._music:
             try:
-                url_music = self.make_song(history.content)
+                url_music = self.make_song(history.content, emotions)
                 return {"history": history.content, "url_pic": url, "url_music": url_music}
             except Exception as e:
                 logger.error(e)
-                raise "Сервис генерации музыки временно недоступен, попробуйте позже"
+                raise ServiceUnavailableError("Сервис генерации музыки временно недоступен, попробуйте позже")
 
         return {"history": history.content, "url_pic": url}
