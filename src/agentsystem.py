@@ -374,7 +374,7 @@ class AgentSystem:
         """
         is_contain_emotional = False
         if not is_contain_emotional:
-            emotions = self._analyze_emotions(self.model, letter) if letter else ""
+            emotions = self._analyze_emotions(self.model, story_text) if story_text else ""
 
         try:
             history_summary = self.get_summary_history(story_text)
