@@ -100,7 +100,7 @@ async def get_audio_from_llm(
 
     audio_url = response['url_music']
     audio_bg_image = response['url_pic']
-    audio_shortname = name_generator.name_generator(response['history'])
+    audio_shortname = response['header']
 
     return {
         "url": audio_url,
