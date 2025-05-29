@@ -384,14 +384,12 @@ class AgentSystem:
         except Exception as e:
             logger.exception("Some error occurred")
             raise ServiceUnavailableError("Сервис генерации изображений временно недоступен, попробуйте позже") from e
-        
+        header = self.create_header(history_summary)
         if self._music:
             try:
                 url_music = self.make_song(history.content, emotions)
-                header = self.create_header(history_summary)
                 return {"history": history.content, "url_pic": url, "url_music": url_music, "header": header}
             except Exception as e:
                 logger.error(e)
                 raise ServiceUnavailableError("Сервис генерации музыки временно недоступен, попробуйте позже")
-
-        return {"history": history.content, "url_pic": url}
+        return {"history": history.content, "url_pic": url, "header": header}
