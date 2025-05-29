@@ -147,7 +147,7 @@ class AgentSystem:
         if response.status_code == 200:
             id = response.json()["data"]["task_id"]
         else:
-            raise "Картинка не создалась"
+            raise Exception("Картинка не создалась")
         for _ in range(3):
             time.sleep(5)
             url = f"https://api.freepik.com/v1/ai/mystic/{id}"
@@ -359,16 +359,16 @@ class AgentSystem:
         except (
             Exception
         ) as e:  # на случай, если история не загенилась по каким-то причинам
-            logger.error(e)
-            raise ServiceUnavailableError("Сервис временно недоступен, попробуйте позже.")
+            logger.exception("Some error occurred")
+            raise ServiceUnavailableError("Сервис временно недоступен, попробуйте позже.") from e
 
         history_summary = self.get_summary_history(history.content)
         history_summary += "It all happened during WWII"
         try:  # подумать вообще над этим блоком. Надо как-то сделать так, чтобы хоть что-то вернулось
             url = self.create_image(history_summary)
         except Exception as e:
-            logger.error(e)
-            raise ServiceUnavailableError("Сервис генерации изображений временно недоступен, попробуйте позже")
+            logger.exception("Some error occurred")
+            raise ServiceUnavailableError("Сервис генерации изображений временно недоступен, попробуйте позже") from e
         
         if self._music:
             try:
