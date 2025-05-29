@@ -2,6 +2,8 @@ import logging
 import re
 
 import time
+from fastapi import HTTPException
+
 import requests
 
 from langchain_core.prompts import PromptTemplate
@@ -348,7 +350,12 @@ class AgentSystem:
                 logger.error(
                     "Запрос пользователя не соответствует требованиям военной тематики."
                 )
-                raise UserMisstake("Ваш запрос не соответствует требованиям военной тематики. Пожалуйста, переформулируйте его.")
+                raise HTTPException(
+                    status_code=400,
+                    detail= "Запрос пользователя не соответствует требованиям военной тематики."
+
+                )
+                # raise UserMisstake("Ваш запрос не соответствует требованиям военной тематики. Пожалуйста, переформулируйте его.")
             is_contain_emotional = self._decision_of_emotions(query, self.model)
         main_template = PromptTemplate.from_template(main_template)
         chat = main_template | self.model

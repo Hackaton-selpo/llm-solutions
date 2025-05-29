@@ -133,8 +133,8 @@ async def get_image_from_llm(
     else:
         response = agent.process_agent_system(query=prompt)
 
-    image_url = response['url_music']
-    image_shortname = name_generator.name_generator(response['history'])
+    image_url = response['url_pic']
+    image_shortname = response['header']
 
     return {
         "url": image_url,
