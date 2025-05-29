@@ -304,6 +304,105 @@ class AgentSystem:
         extracted_emotions = self._extract_emotions_from_llm_response(response.content)
         return extracted_emotions if extracted_emotions != "модель не ответила" else " "
 
+    def generate_story_text(self, query: str = None, letter: str = None) -> str:
+        """
+        Генерирует текст истории на основе запроса и/или письма.
+        Учитывает эмоциональную составляющую и проверяет историческую достоверность.
+        """
+        emotions = ""
+        is_contain_emotional = False
+        
+        if query is None and letter is None:
+            raise UserMisstake("Запрос не содержит ни текста, ни письма.")
+        
+        if query is not None:
+            is_normal_query = self._check_user_query(query)
+            if not is_normal_query:
+                raise HTTPException(status_code=400, detail="Запрос должен быть военной тематики.")
+            is_contain_emotional = self._decision_of_emotions(query, self.model)
+
+        main_template = """Ты - профессиональный писатель, который пишет истории на основе писем военных лет с 1941 года по 1945 (Великая Отечественная Война).
+
+        Однако ты получаешь не только письмо с фронта, но и запрос на эмоциональную составляющую истории.
+        Данный запрос может содержать абсолютно любое требование к истории, например:
+        - "История должна быть грустной"
+        - "Пусть история будет веселой, но с элементами драмы"
+        и так далее.
+        
+        Также помимо эмоциональной составляющей, ты получаешь ещё и дополнительные пожелания от пользователя, которые ты должен учесть при написании истории.
+        
+        Также во время написания истории, ты ОБЯЗАН проверять все факты, которые ты используешь в истории, на соответствие историческим событиям.
+        
+        Эмоциональная составляющая будет тебе передаваться в следующей строке:
+        
+        Эмоциональная составляющая: {emotional}
+
+        Запрос пользователя: {query}
+
+        Само письмо, к которому ты должен написать историю: {letter}
+
+        Если эмоциональная составляющая не передана, то проанализируй письмо и выдели из него эмоции
+        
+        Будь пожалуйста внимателен и используй все пожелания пользователя, которые он указал в запросе.
+        
+        Если письмо отсутствует, то ты должен написать историю на основе запроса пользователя.
+
+        Если запрос пользователя противоречит письму. К примеру, пользователь хочет то, чего совершенно не могло быть в письме, то ты должен написать об этом пользователю и попросить его переформулировать запрос.
+        
+        В качестве ответа ты должен только написать историю, которую ты сочинил. История должна быть до 500 слов, но не менее 300.
+        """
+        main_template = PromptTemplate.from_template(main_template)
+        chat = main_template | self.model
+
+        if not is_contain_emotional:
+            emotions = self._analyze_emotions(self.model, letter) if letter else ""
+
+        try:
+            history = chat.invoke({
+                "emotional": emotions,
+                "query": query or "",
+                "letter": letter or "",
+            })
+            return history.content
+        except Exception as e:
+            logger.exception("Ошибка при генерации текста")
+            raise ServiceUnavailableError("Не удалось сгенерировать текст истории.") from e
+
+    def generate_audio_url(self, story_text: str) -> str:
+        """
+        Генерирует URL аудиозаписи, соответствующей эмоциям истории.
+        """
+        is_contain_emotional = False
+        if not is_contain_emotional:
+            emotions = self._analyze_emotions(self.model, letter) if letter else ""
+
+        try:
+            history_summary = self.get_summary_history(story_text)
+            history_summary += "It all happened during WWII"
+
+            image_url = self.create_image(history_summary)
+            audio_url = self.make_song(history_summary, emotions)
+            header = self.create_header(history_summary)
+            return {"url_image": image_url, "url_audio": audio_url, "header": header}
+        except Exception as e:
+            logger.exception("Ошибка при генерации аудио")
+            raise ServiceUnavailableError("Сервис генерации музыки недоступен.") from e
+
+    def generate_image_url(self, story_text: str) -> str:
+        """
+        Генерирует URL изображения, соответствующего содержанию истории.
+        """
+        try:
+            history_summary = self.get_summary_history(story_text)
+            history_summary += "It all happened during WWII"
+
+            image_url = self.create_image(history_summary)
+            header = self.create_header(history_summary)
+            return {"url_image": image_url, "header": header}
+        except Exception as e:
+            logger.exception("Ошибка при генерации аудио")
+            raise ServiceUnavailableError("Сервис генерации музыки недоступен.") from e
+
     def process_agent_system(self, query: str = None, letter: str = None) -> dict:
         """
         Обрабатывает запрос пользователя и генерирует историю

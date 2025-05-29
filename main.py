@@ -66,9 +66,9 @@ async def generate_llm_answer(
         get letter from db and add to prompt
         """
         letter_text = await get_letter_by_id(letter_id)
-        story = agent.process_agent_system(query=prompt, letter=letter_text)
+        story = agent.generate_story_text(query=prompt, letter=letter_text)
     else:
-        story = agent.process_agent_system(query=prompt)
+        story = agent.generate_story_text(query=prompt)
     return {"ai_answer": story}
 
 
@@ -94,13 +94,15 @@ async def get_audio_from_llm(
         get letter from db and add to prompt
         """
         letter_text = await get_letter_by_id(letter_id)
-        response = agent.process_agent_system(query=prompt, letter=letter_text)
+        story = agent.generate_story_text(query=prompt, letter=letter_text)
     else:
-        response = agent.process_agent_system(query=prompt)
+        story = agent.generate_story_text(query=prompt)
 
-    audio_url = response['url_music']
-    audio_bg_image = response['url_pic']
-    audio_shortname = response['header']
+    audio_response = agent.generate_audio_url(story)
+
+    audio_url = audio_response['url_audio']
+    audio_bg_image = audio_response['url_image']
+    audio_shortname = audio_response['header']
 
     return {
         "url": audio_url,
@@ -129,12 +131,14 @@ async def get_image_from_llm(
         get letter from db and add to prompt
         """
         letter_text = await get_letter_by_id(letter_id)
-        response = agent.process_agent_system(query=prompt, letter=letter_text)
+        story = agent.generate_story_text(query=prompt, letter=letter_text)
     else:
-        response = agent.process_agent_system(query=prompt)
+        story = agent.generate_story_text(query=prompt)
 
-    image_url = response['url_pic']
-    image_shortname = response['header']
+    image_response = agent.generate_image_url(story)
+
+    image_url = image_response['url_image']
+    image_shortname = image_response['header']
 
     return {
         "url": image_url,
