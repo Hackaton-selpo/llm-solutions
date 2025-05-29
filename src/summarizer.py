@@ -18,25 +18,7 @@ class NameGenerator:
         )
 
     def name_generator(self, text: str) -> str:
-        clear_text = self._preprocess_text(text)
-        prompt = (
-            f"Напиши короткий и ёмкий заголовок из 2-3 слов, который точно отражает суть этого текста:\n"
-            f"{clear_text}\n"
-            f"Заголовок:"
-        )
-        outputs = self.generator(
-            prompt,
-            max_new_tokens=15,
-            num_return_sequences=1,
-            do_sample=True,
-            temperature=0.7,
-            truncation=True,
-            pad_token_id=self.generator.tokenizer.eos_token_id,
-        )
-        generated_text = outputs[0]['generated_text']
-        title = generated_text.split("Заголовок:")[-1].strip()
-        title_words = title.split()
-        return ' '.join(title_words[:4])
+        return text[:4]
 
     def _preprocess_text(self, text: str) -> str:
         text = text.lower()
