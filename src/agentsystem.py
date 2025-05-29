@@ -116,7 +116,7 @@ class AgentSystem:
             chat = prompt | self.model
             song_text = chat.invoke({"history": history}).content
             print(song_text) # потом убрать
-            
+
             input = {
             #  "callback_url": None,
             "title": "Военная песня 1",
@@ -381,7 +381,9 @@ class AgentSystem:
             history_summary = self.get_summary_history(story_text)
             history_summary += "It all happened during WWII"
 
-            image_url = self.create_image(history_summary)
+            image_prompt = f"Сгенерируй изображение без людей, фонового типа. {history_summary}"
+
+            image_url = self.create_image(image_prompt)
             audio_url = self.make_song(history_summary, emotions)
             header = self.create_header(history_summary)
             return {"url_image": image_url, "url_audio": audio_url, "header": header}
