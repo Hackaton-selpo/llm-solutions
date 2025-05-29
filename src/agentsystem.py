@@ -41,6 +41,21 @@ class AgentSystem:
         self._api_key_image = api_key_image
         self._api_key_song = api_key_song
     
+    def create_header(self, history: str) -> str:
+        """Создает загологовок к треку"""
+        template = """Ты - прфоессиональный композитор, который пишет песни военного времени. 
+        
+        Ты получаешь краткое изложение истории и тебе нужно на основе этого текста сделать заголовок для песни. Заголовок не должен быть больше 3 слов
+        
+        История: {history}
+
+        В ответе укажи только название. Больше ничего указывать не нужно. Также нельзя использовать разметку .md
+        """
+        prompt = PromptTemplate.from_template(template)
+        chat = prompt | self.model
+        response = chat.invoke({"history": history})
+        return response.content
+
     def _take_emotions_from_query(self, query: str) -> str:
         """Выделяет эмоции из письма пользователя"""
         template = """Пользователь пишет запрос, в котором он просит рассказать историю.
@@ -373,7 +388,8 @@ class AgentSystem:
         if self._music:
             try:
                 url_music = self.make_song(history.content, emotions)
-                return {"history": history.content, "url_pic": url, "url_music": url_music}
+                header = self.create_header(history_summary)
+                return {"history": history.content, "url_pic": url, "url_music": url_music, "header": header}
             except Exception as e:
                 logger.error(e)
                 raise ServiceUnavailableError("Сервис генерации музыки временно недоступен, попробуйте позже")
