@@ -6,7 +6,7 @@ from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
-from agentsystem import ServiceUnavailableError
+from src.agentsystem import ServiceUnavailableError
 
 class Checker:
     def __init__(
